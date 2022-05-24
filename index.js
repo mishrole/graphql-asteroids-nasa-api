@@ -1,5 +1,12 @@
+import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { createServer } from '@graphql-yoga/node';
+import fetch from 'node-fetch';
+
+dotenv.config();
+
+const API_NASA_NEO = 'https://api.nasa.gov/neo/rest/v1/feed';
+const API_KEY = process.env.API_KEY;
 
 const ALL_AUTHORS = [
   {
@@ -26,7 +33,8 @@ const ALL_AUTHORS = [
 
 const TYPE_DEFS = `
   type Query {
-    authors: [Author]
+    authors: [Author],
+    asteroids: Asteroids,
   },
   type Author {
     name: String!
@@ -34,11 +42,6 @@ const TYPE_DEFS = `
   },
   type Mutation {
     addAuthor(name: String): Author
-  },
-  type Asteroids {
-    element_count: Int
-    near_earth_objects: [NearEarthObject]
-    links: Links
   },
   type Links {
     next: String
@@ -74,7 +77,7 @@ const TYPE_DEFS = `
     miss_distance: MissDistance
     orbiting_body: String
   },
-  type NearEarthObject {
+  type Today {
     links: Links
     id: String
     neo_reference_id: String
@@ -85,7 +88,15 @@ const TYPE_DEFS = `
     is_potentially_hazardous_asteroid: Boolean
     close_approach_data: [CloseApproachData]
     is_sentry_object: Boolean
-  }
+  },
+  type NearEarthObject {
+    today: [Today]
+  },
+  type Asteroids {
+    element_count: Int
+    near_earth_objects: NearEarthObject
+    links: Links
+  },
 `;
 
 const RESOLVERS = {
@@ -93,6 +104,14 @@ const RESOLVERS = {
     authors: () => {
       return ALL_AUTHORS
     },
+    asteroids: async () => {
+      const START_DATE = '2022-05-24';
+      const END_DATE = '2022-05-24';
+      let response = await fetch(`${API_NASA_NEO}?start_date=${START_DATE}&end_date=${END_DATE}&api_key=${API_KEY}`);
+      let data = await response.text();
+      data = data.replaceAll(START_DATE, 'today');
+      return JSON.parse(data);
+    }
   },
   Mutation: {
     addAuthor: (_, data) => {
@@ -130,6 +149,32 @@ m
 {
   authors {
     id name
+  }
+}
+
+{
+  asteroids {
+    element_count,
+    near_earth_objects {
+      today {
+        id
+        name
+    		nasa_jpl_url
+        is_potentially_hazardous_asteroid
+        close_approach_data {
+          close_approach_date
+          close_approach_date_full
+          epoch_date_close_approach
+          orbiting_body
+        }
+        estimated_diameter {
+          meters {
+            estimated_diameter_min
+            estimated_diameter_max
+          }
+        }
+      }
+    }
   }
 }
 
